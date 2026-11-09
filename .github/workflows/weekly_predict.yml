@@ -1,33 +1,62 @@
-name: Weekly Lotto TimesFM Forecast Update
+name: Weekly Lotto Statistics Update
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/weekly_predict.yml'
   schedule:
-    # 매주 토요일 12:10 UTC (한국시간 토요일 밤 21:10) 자동 실행
+    # Saturday 21:10 KST, after the scheduled draw.
     - cron: "10 12 * * 6"
-  workflow_dispatch: # GitHub Actions 탭에서 언제든 수동 1클릭 실행 가능
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: weekly-lotto-update
+  cancel-in-progress: false
+
 jobs:
   update-forecast:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: 저장소 체크아웃
-        uses: actions/checkout@v4
-
-      - name: Python 3.11 설치
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: 시계열 예측 스크립트 실행 (forecast.json 갱신)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate source and behavior
+        run: |
+          test -f scripts/fetch_and_predict.py
+          if git ls-files --stage | grep -q '^160000 '; then
+            echo 'Unexpected gitlink in source tree' >&2
+            exit 1
+          fi
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          node --test tests/*.test.js
+      - name: Fetch official draws and update statistics
+        id: collect
+        continue-on-error: true
         run: python scripts/fetch_and_predict.py
-
-      - name: 변경된 예측 데이터 자동 커밋 및 푸시
+      - name: Save data or explicit failure status
+        if: steps.collect.outcome == 'success' || steps.collect.outcome == 'failure'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/data/forecast.json
-          git diff --staged --quiet || git commit -m "chore: update weekly lotto forecast data"
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update official lotto data status"
+            git push origin HEAD:main
+          fi
+      - name: Report collection failure
+        if: steps.collect.outcome == 'failure'
+        run: |
+          echo 'Official data could not be verified. Published status is stale or unavailable; no synthetic draws were generated.' >&2
+          exit 1

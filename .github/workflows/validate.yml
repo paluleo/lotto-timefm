@@ -1,0 +1,33 @@
+name: Validate Lotto Site
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check source and test offline failure paths
+        run: |
+          test -f scripts/fetch_and_predict.py
+          if git ls-files --stage | grep -q '^160000 '; then
+            echo 'Unexpected gitlink in source tree' >&2
+            exit 1
+          fi
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          node --test tests/*.test.js
+          python -m py_compile scripts/fetch_and_predict.py
