@@ -31,11 +31,13 @@ python -m http.server 8765 --bind 127.0.0.1 --directory public
 
 `http://127.0.0.1:8765`를 열어 확인합니다. `file://`로 직접 열면 JSON 요청이 차단될 수 있습니다. `--output <경로>`로 검증용 JSON을 별도로 저장할 수 있습니다. 테스트의 합성 fixture는 임시 디렉터리에서만 사용하며 공개 데이터로 저장하지 않습니다.
 
-## 자동 실행과 Cloudflare Pages
+## 자동 실행과 Cloudflare 배포
 
 `Validate Lotto Site`는 push/PR 시 오프라인 회귀 테스트와 하위 모듈 없이 소스를 체크아웃할 수 있는지 검사합니다. `Weekly Lotto Statistics Update`는 토요일 21:10 KST, 수동 실행 또는 main의 수집기·해당 workflow 변경 시 공식 데이터를 갱신합니다. 생성 JSON만 변경하는 커밋은 수집기를 다시 실행하지 않습니다. 수집 실패 시에도 `stale/unavailable` 상태를 커밋한 뒤 실행을 실패로 보고합니다. 갱신 workflow의 기존 `contents: write` 권한은 유지했고 추가 권한은 요구하지 않습니다.
 
-Cloudflare Pages는 정적 파일을 제공하도록 기존 프로젝트의 출력 디렉터리를 `public`로 설정합니다. 빌드는 필요하지 않습니다. GitHub에 연결된 기존 프로젝트의 실제 배포 성공 상태와 배포 URL은 별도로 확인해야 합니다. 이 저장소에는 Cloudflare 자격 증명이나 새 계정·권한 생성 절차가 포함되어 있지 않습니다.
+현재 GitHub에 연결된 배포 대상은 **Cloudflare Workers의 `lotto-timefm`**입니다. 루트의 `wrangler.jsonc`는 `public`을 정적 자산 디렉터리로 지정합니다. 별도의 애플리케이션 빌드나 Worker JavaScript는 필요하지 않습니다. 기존 Workers Builds에서 저장소 루트를 사용하고 배포 명령은 `npx wrangler deploy`로 실행합니다. 계정 ID·토큰·새 권한·새 사이트 생성 설정은 저장소에 포함하지 않습니다. 실제 계정의 빌드 로그와 배포 성공 상태는 별도로 확인해야 합니다.
+
+Pages에 별도로 배포하려는 경우에도 `public`을 출력 디렉터리로 사용할 수 있지만, 현재 연결된 Workers 프로젝트와는 다른 배포 대상입니다.
 
 ## Git 복구 내역
 
