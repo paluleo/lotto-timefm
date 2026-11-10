@@ -7,9 +7,16 @@
     "api_url": "https://www.dhlottery.co.kr/lt645/selectPstLt645InfoNew.do",
     "latest_round": 1249,
     "latest_draw_date": "2026-11-07",
-    "verified_at": "2026-11-10T14:40:26Z"
+    "verified_at": "2026-11-10T15:44:41Z",
+    "history_verification": {
+      "mode": "incremental",
+      "full_history_verified_at": "2026-11-10T14:40:26Z",
+      "rechecked_first_round": 1186,
+      "rechecked_last_round": 1249,
+      "baseline_sha256": "fb3cf2f063e54b40ac25e503f2d1140e1803aabddd05eb4b161c8290974573a9"
+    }
   },
-  "updated_at": "2026-11-10T14:40:26Z",
+  "updated_at": "2026-11-10T15:44:45Z",
   "raw_draws": [
     {
       "round": 1,

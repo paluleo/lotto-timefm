@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
   "status": "current",
-  "updated_at": "2026-11-10T15:27:44Z",
+  "updated_at": "2026-11-10T15:44:41Z",
   "source": {
     "name": "동행복권",
     "url": "https://www.dhlottery.co.kr/",
     "api_url": "https://www.dhlottery.co.kr/lt645/selectPstLt645InfoNew.do",
     "latest_round": 1249,
     "latest_draw_date": "2026-11-07",
-    "verified_at": "2026-11-10T15:27:44Z"
+    "verified_at": "2026-11-10T15:44:41Z"
   },
   "model": {
     "id": "ema-frequency-v1",
