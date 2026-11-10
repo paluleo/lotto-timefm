@@ -4,9 +4,11 @@
 
 ## 공식 데이터와 연도·주차 통계
 
-- 출처는 [동행복권 추첨 결과](https://www.dhlottery.co.kr/lt645/result)이며, 공식 페이지의 `/lt645/selectPstLt645InfoNew.do` 응답만 수집합니다. `center` 요청으로 최신 회차를 확인하고 `older` 요청으로 1회차까지 내려갑니다.
+- 출처는 [동행복권 추첨 결과](https://www.dhlottery.co.kr/lt645/result)이며, 공식 페이지의 `/lt645/selectPstLt645InfoNew.do` 응답만 수집합니다. 기본 전체 수집은 `center` 요청으로 최신 회차를 확인하고 `older` 요청으로 1회차까지 내려갑니다.
 - `scripts/collect_history.py`는 회차·추첨일·서로 다른 본번호 6개·보너스 번호·전체 연속성을 검증합니다. 2026-11-10에 확인한 전체 이력은 **1~1,249회차**입니다. 최신 추첨 완료 예상 시각은 토요일 21:00 KST입니다.
-- `public/data/draw-history.json`에 원본 번호와 출처·검증 시각을 보존합니다. 페이지 사이에 0.15초를 기다리고 일시적 통신 오류는 최대 3회 요청합니다. 전체 수집 실패 시 기존 이력 파일을 보존하고 실패를 반환합니다.
+- `public/data/draw-history.json`에 원본 번호와 출처·검증 범위를 보존합니다. 전체 수집은 페이지 사이에 0.15초를 기다리고 일시적 통신 오류에 2초·4초 간격으로 최대 3회 요청합니다. 실패 시 기존 이력 파일을 보존하고 실패를 반환합니다.
+- `--recent-report public/data/forecast.json`은 공식 확인 후 30분 이내인 최신 **64회차** 자료로 기존 전체 이력을 갱신합니다. 출처·시각·요약과 1회차부터의 전체 연속성을 검증하고, 보너스를 포함해 겹치는 모든 회차가 같으며 중복 구간이 **32회 이상**일 때만 합칩니다. 자료 충돌이나 중복 부족은 실패로 처리합니다. 기존 전체 파일이 없거나 유효하지 않으면 공식 전체 수집을 시도합니다.
+- 증분 갱신의 `source.verified_at`은 최근 64회 자료를 확인한 시각입니다. `source.history_verification`은 전체를 조회했던 `full_history_verified_at`, 이번에 재대조한 회차 범위와 이전 전체 번호 자료의 SHA-256을 보존합니다. 과거 전체 회차를 다시 조회했다고 표시하지 않습니다. 전체 재확인이 필요하면 `--recent-report` 없이 실행합니다.
 - 연도·주차는 공식 토요일 추첨일의 **ISO-8601 연도와 주차**입니다. 전체, ISO 연도별, ISO 주차별, 연도·주차별 표본 수와 번호 출현 횟수를 계산합니다. 연말·연초의 ISO 연도는 달력 연도와 다를 수 있습니다.
 - 1등 조합은 실제 본번호 6개입니다. 2등 조건 조합은 본번호 중 하나를 보너스로 바꾼 **회차당 6개의 파생 조합**입니다. 실제 구매된 당첨 복권이나 당첨자 목록이 아니며, 독립적인 6회 추첨으로 세지 않습니다.
 - 정확히 같은 조합의 반복도 집계합니다. 동률 조합의 표시 순서는 번호 오름차순이며 예측 우선순위가 아닙니다. 같은 ISO 주차의 표본이 적다는 점도 함께 표시합니다.
@@ -65,7 +67,7 @@ python -m venv ..\timesfm-runtime
 ..\timesfm-runtime\Scripts\python.exe -m pip install torch==2.15.0+cpu --index-url https://download.pytorch.org/whl/cpu
 ..\timesfm-runtime\Scripts\python.exe -m pip install -r requirements-timesfm.txt
 ..\timesfm-runtime\Scripts\python.exe scripts/fetch_and_predict.py
-..\timesfm-runtime\Scripts\python.exe scripts/collect_history.py
+..\timesfm-runtime\Scripts\python.exe scripts/collect_history.py --recent-report public/data/forecast.json
 ..\timesfm-runtime\Scripts\python.exe scripts/timesfm_forecast.py --input public/data/draw-history.json --output ../timesfm-full.json --context 64 --holdout 104 --threads 4 --batch-size 4 --cache-dir ../.model-cache
 ..\timesfm-runtime\Scripts\python.exe scripts/publish_timesfm_report.py --input ../timesfm-full.json
 ```
@@ -87,6 +89,8 @@ Node.js 22 이상을 사용합니다. `http://127.0.0.1:8765`로 접속하며 `f
 ## 자동 갱신과 배포
 
 `Weekly Lotto Statistics Update`는 **매주 토요일 21:10 KST**, 수동 실행 또는 main의 수집·모델 스크립트/의존성/workflow 변경 시 실행합니다. 공식 자료 수집, CPU 런타임 준비, 실제 TimesFM 추론과 104회 평가를 마친 뒤 JSON을 커밋합니다. 생성 JSON만 변경하는 커밋은 수집기를 다시 실행하지 않습니다. 수집이나 추론 실패 시 명시적인 실패 상태를 남기며 실행도 실패로 보고합니다. 전체 모델 감사 결과는 GitHub Actions의 `timesfm-number-audit` artifact로 보관합니다.
+
+매주 최근 64회 수집을 먼저 수행하며, 실패하면 5초 간격으로 최대 3회 시도합니다. 이어서 위의 증분 검증으로 전체 이력을 갱신합니다. 전체 이력 갱신 단계는 최대 5분이며, 최근 구간 확인과 이전 전체 확인 시각을 구분해 게시합니다. 이 짧은 재시도를 모두 실패하면 해당 실행은 실패로 끝나고, 별도의 시간별·일별 재게시 감시는 수행하지 않습니다.
 
 기존 GitHub Actions CPU runner와 Cloudflare 연결을 사용합니다. 연결과 기존 권한이 정상이라면 모델용 계정 연결·GPU 결제·유료 API 설정은 필요 없습니다. 최초 설치·다운로드가 있으므로 정해진 시각에 결과가 즉시 나타나는 것은 아닙니다. workflow는 최대 45분을 허용합니다.
 

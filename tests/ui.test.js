@@ -168,6 +168,18 @@ test('stale data retains history while generation is disabled',async()=>{
   instance.generate();assert.equal(doc.nodes['generated-results'].children.length,0);
 });
 
+test('global source status does not repeat the legacy EMA-only TimesFM disclaimer',async()=>{
+  const data=freshFixture();
+  data.message='동행복권 공식 결과로 산출한 참고용 통계입니다. TimesFM은 사용하지 않으며 당첨 확률 향상은 검증되지 않았습니다.';
+  const doc=fakeDocument();const instance=app.start(doc,response(data),()=>memoryStorage());await instance.ready;
+  assert.equal(doc.nodes['status-panel'].dataset.state,'current');
+  assert.match(doc.nodes['status-message'].textContent,/동행복권에서 확인한/);
+  assert.ok(doc.nodes['status-message'].textContent.includes(`${data.source.latest_round}회`));
+  assert.doesNotMatch(doc.nodes['status-message'].textContent,/TimesFM|사용하지 않/);
+  assert.match(doc.nodes['model-type-badge'].textContent,/EMA·출현 빈도 통계 · TimesFM 미사용/);
+  instance.destroy();
+});
+
 test('SVG failure and blocked browser storage do not prevent a valid current generator',async()=>{
   const data=freshFixture();
   const doc=fakeDocument({svgFailure:true});

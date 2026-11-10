@@ -49,8 +49,12 @@ jobs:
         timeout-minutes: 5
         continue-on-error: true
         run: |
-          python scripts/fetch_and_predict.py
-          python scripts/collect_history.py
+          for attempt in 1 2 3; do
+            if python scripts/fetch_and_predict.py; then break; fi
+            if test "$attempt" -eq 3; then exit 1; fi
+            sleep 5
+          done
+          python scripts/collect_history.py --recent-report public/data/forecast.json
       - name: Mark model output incomplete until real inference succeeds
         id: model_status
         run: python scripts/publish_timesfm_report.py --fail-reason "The current official-data and TimesFM run has not completed."

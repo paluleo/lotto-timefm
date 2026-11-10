@@ -79,13 +79,22 @@ const TimesFMExperiments = (() => {
       by_iso_year_week:draws.map(d=>{const iso=isoWeek(d.date);return {iso_year:iso.year,iso_week:iso.week,rounds:[d.round],first_prize_combinations:[{numbers:d.numbers,count:1}],second_prize_qualifying_combinations:secondCombinations(d.numbers,d.bonus).map(numbers=>({numbers,count:1}))};})
     };
   }
+  function validateVerificationScope(source) {
+    if(source.history_verification===undefined)return;
+    const scope=source.history_verification;
+    requireValue(object(scope)&&['full','incremental'].includes(scope.mode)&&stamp(scope.full_history_verified_at)&&Date.parse(scope.full_history_verified_at)>=FIRST_DRAW&&Date.parse(scope.full_history_verified_at)<=Date.parse(source.verified_at)&&integer(scope.rechecked_first_round,1,source.latest_round)&&scope.rechecked_last_round===source.latest_round,'최근 자료와 전체 이력의 확인 범위를 검증할 수 없습니다.');
+    if(scope.mode==='full')requireValue(scope.rechecked_first_round===1&&Date.parse(scope.full_history_verified_at)===Date.parse(source.verified_at)&&scope.baseline_sha256===null,'전체 이력 확인 기록이 일치하지 않습니다.');
+    else requireValue(/^[a-f0-9]{64}$/.test(scope.baseline_sha256),'이전 보존 이력의 확인 근거가 없습니다.');
+  }
   function validateHistory(history,reference,now) {
     requireValue(object(history)&&history.schema_version===1&&history.status==='current'&&object(history.source)&&Array.isArray(history.raw_draws)&&integer(history.count,32,10000)&&history.count===history.raw_draws.length,'연도·주차 통계의 공식 원본 이력을 확인할 수 없습니다.');
     const source=history.source;
     requireValue(source.name==='동행복권'&&source.url==='https://www.dhlottery.co.kr/'&&source.api_url===reference.source.api_url&&source.latest_round===reference.source.latest_round&&source.latest_draw_date===reference.source.latest_draw_date,'연도·주차 자료와 최신 공식 추첨 회차가 다릅니다.');
     requireValue(stamp(source.verified_at)&&stamp(history.updated_at)&&Date.parse(source.verified_at)<=Date.parse(history.updated_at)&&Date.parse(history.updated_at)<=now+60000&&expectedRound(Date.parse(source.verified_at))===source.latest_round);
+    validateVerificationScope(source);
     const first=history.raw_draws[0]?.round;
     requireValue(integer(first,1)&&first+history.count-1===source.latest_round);
+    if(source.history_verification!==undefined)requireValue(first===1,'전체 보존 이력의 시작 회차를 확인할 수 없습니다.');
     history.raw_draws.forEach((draw,i)=>requireValue(object(draw)&&draw.round===first+i&&draw.date===drawDate(draw.round)&&numbers(draw.numbers)&&integer(draw.bonus,1,45)&&!draw.numbers.includes(draw.bonus)));
     return history.raw_draws;
   }
@@ -162,6 +171,7 @@ const TimesFMExperiments = (() => {
     const source=report.source,model=report.model,input=report.input,prediction=report.prediction;
     requireValue(object(source)&&source.name==='동행복권'&&source.url==='https://www.dhlottery.co.kr/'&&source.api_url===reference.source.api_url&&source.latest_round===reference.source.latest_round&&source.latest_draw_date===reference.source.latest_draw_date,'실험 결과와 현재 공식 자료의 마지막 회차가 다릅니다.');
     requireValue(stamp(source.verified_at)&&Date.parse(source.verified_at)<=Date.parse(report.generated_at)&&expectedRound(Date.parse(source.verified_at))===source.latest_round);
+    validateVerificationScope(source);
     requireValue(object(model)&&model.id===MODEL_ID&&model.name==='TimesFM 2.5 200M (PyTorch)'&&model.package==='timesfm'&&model.package_version==='2.0.2'&&model.revision===REVISION&&model.checkpoint_sha256===CHECKPOINT&&model.checkpoint_verified===true&&model.timesfm_used===true&&model.series==='weekly_main_number_occurrence_0_or_1'&&model.point_statistic==='median_0.5_quantile'&&model.runtime_versions?.timesfm==='2.0.2','실제 TimesFM 모델의 실행 근거를 확인할 수 없습니다.');
     requireValue(object(input)&&integer(input.count,32,10000)&&integer(input.first_round,1)&&input.last_round===source.latest_round&&input.first_round+input.count-1===input.last_round&&input.last_draw_date===source.latest_draw_date&&/^[a-f0-9]{64}$/.test(input.draws_sha256));
     requireValue(object(prediction)&&integer(prediction.context_length,32,512)&&prediction.context_length%32===0&&prediction.context_length<=input.count&&prediction.context_end_round===source.latest_round&&prediction.context_start_round===source.latest_round-prediction.context_length+1&&prediction.target_round===source.latest_round+1&&prediction.target_date===drawDate(prediction.target_round)&&prediction.horizon===1&&prediction.score_kind==='relative_rank_not_probability');
@@ -198,7 +208,8 @@ const TimesFMExperiments = (() => {
       setText('timesfm-status',state==='stale'?'최신 실험 결과 대기':state==='failed'?'모델 실행 실패':'실험 결과 확인 불가');
       setText('timesfm-message',message);
       for(const id of ['timesfm-games','timesfm-other-games','timesfm-frequency-table','timesfm-week-combinations','timesfm-repeat-preview','timesfm-metrics','timesfm-comparison-table'])$(id).replaceChildren();
-      for(const id of ['timesfm-target','timesfm-model-name','timesfm-source-round','timesfm-source-verified','timesfm-generated-at','timesfm-recalculated-at','timesfm-replay-note','timesfm-revision','timesfm-library','timesfm-comparison','timesfm-bootstrap-note','timesfm-evaluation-window','timesfm-seasonal-note','timesfm-repeat-note','timesfm-seasonal-repeat-note'])setText(id,'');
+      for(const id of ['timesfm-target','timesfm-model-name','timesfm-source-round','timesfm-source-verified','timesfm-history-verified-at','timesfm-history-verification-note','timesfm-generated-at','timesfm-recalculated-at','timesfm-replay-note','timesfm-revision','timesfm-library','timesfm-comparison','timesfm-bootstrap-note','timesfm-evaluation-window','timesfm-seasonal-note','timesfm-repeat-note','timesfm-seasonal-repeat-note'])setText(id,'');
+      $('timesfm-history-verified-row').hidden=true;$('timesfm-history-verification-note').hidden=true;
       $('timesfm-recalculated-row').hidden=true;$('timesfm-replay-note').hidden=true;
       $('timesfm-model-link').removeAttribute('href');setText('timesfm-model-link','');
     }
@@ -269,7 +280,13 @@ const TimesFMExperiments = (() => {
       setText('timesfm-target',`${report.prediction.target_round}회 · ${report.prediction.target_date} 대상 조합 5게임`);games($('timesfm-games'),report.recommendations.methods.combined.games);
       $('timesfm-other-games').replaceChildren();['timesfm','statistics','uniform'].forEach(method=>{const section=element('section');section.append(element('h3','',LABELS[method]));const list=element('div','results');games(list,report.recommendations.methods[method].games);section.append(list);$('timesfm-other-games').append(section);});
       setText('timesfm-model-name',report.model.name);setText('timesfm-source-round',`${report.input.first_round}~${report.input.last_round}회 (${report.input.count}회) · 마지막 추첨 ${report.source.latest_draw_date}`);
-      setText('timesfm-source-verified',time(report.source.verified_at));setText('timesfm-generated-at',time(report.audit_replay?.original_generated_at||report.generated_at));setText('timesfm-revision',report.model.revision);setText('timesfm-library',`${report.model.package} ${report.model.package_version}`);
+      setText('timesfm-source-verified',time(history.source.verified_at));setText('timesfm-generated-at',time(report.audit_replay?.original_generated_at||report.generated_at));setText('timesfm-revision',report.model.revision);setText('timesfm-library',`${report.model.package} ${report.model.package_version}`);
+      const scope=history.source.history_verification;
+      $('timesfm-history-verified-row').hidden=!scope;$('timesfm-history-verification-note').hidden=!scope;
+      if(scope){
+        setText('timesfm-history-verified-at',`1~${expectedRound(Date.parse(scope.full_history_verified_at))}회 · ${time(scope.full_history_verified_at)}`);
+        setText('timesfm-history-verification-note',scope.mode==='incremental'?`이번 공식 자료 대조 범위는 ${scope.rechecked_first_round}~${scope.rechecked_last_round}회입니다. 이전 회차는 위 시각에 전체 확인한 보존 이력을 사용합니다. 이번 갱신에서 전체 과거 이력을 다시 조회한 것은 아닙니다.`:`이번에는 1~${scope.rechecked_last_round}회 전체 이력을 공식 자료에서 확인했습니다.`);
+      }
       $('timesfm-recalculated-row').hidden=!report.audit_replay;$('timesfm-replay-note').hidden=!report.audit_replay;
       if(report.audit_replay){setText('timesfm-recalculated-at',time(report.generated_at));setText('timesfm-replay-note','기존 실제 모델 추론 결과를 그대로 재사용하고 통계 결합 규칙과 과거 비교 결과만 재계산했습니다. 모델을 다시 실행한 결과는 아닙니다.');}
       $('timesfm-model-link').href=`https://huggingface.co/${MODEL_ID}/tree/${REVISION}`;setText('timesfm-model-link',MODEL_ID);

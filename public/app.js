@@ -227,7 +227,8 @@ const LottoFM = (() => {
       if (state === 'unavailable') { const data=currentData; unavailable(data.message || '공식 추첨 결과를 확인하지 못했습니다.'); setText('updated-at-text',formattedTime(data.updated_at)); return; }
       $('status-panel').dataset.state=state;
       setText('data-status', state === 'current' ? '공식 추첨 데이터 확인 완료' : '이전 데이터 · 최신 갱신 필요');
-      setText('status-message', state === 'current' ? (currentData.message || '표시된 회차까지 확인한 결과입니다.') : '마지막으로 확인된 통계를 표시합니다. 최신 결과 확인 전까지 번호 생성은 중단됩니다.');
+      // The source file's message describes the EMA pipeline, not every model on this page.
+      setText('status-message', state === 'current' ? `동행복권에서 확인한 ${currentData.source.latest_round}회까지의 추첨 자료입니다. 아래 각 분석의 실행·검증 상태를 확인하세요.` : '마지막으로 확인된 통계를 표시합니다. 최신 결과 확인 전까지 번호 생성은 중단됩니다.');
       setText('source-status',state === 'current' ? '출처 확인 완료' : '이전 확인 결과');
       setText('source-round',`${currentData.source.latest_round}회 · ${currentData.source.latest_draw_date}`);
       setText('source-verified', formattedTime(currentData.source.verified_at));

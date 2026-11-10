@@ -201,3 +201,45 @@ test('replay presents original inference time separately from statistics recalcu
   }
   app.destroy();
 });
+
+function scopedHistory(mode='incremental'){
+  const data=copy(),first=data.history.raw_draws[0].round;
+  const prefix=Array.from({length:first-1},(_,i)=>({round:i+1,date:new Date(Date.parse('2002-12-07T12:00:00Z')+i*7*86400000).toISOString().slice(0,10),numbers:[1,2,3,4,5,6],bonus:7}));
+  data.history.raw_draws=[...prefix,...data.history.raw_draws];data.history.count=data.history.raw_draws.length;
+  const scope={mode,full_history_verified_at:mode==='full'?data.history.source.verified_at:new Date(NOW-7*86400000).toISOString(),rechecked_first_round:mode==='full'?1:data.history.source.latest_round-63,rechecked_last_round:data.history.source.latest_round,baseline_sha256:mode==='full'?null:'c'.repeat(64)};
+  data.history.source.history_verification=scope;
+  data.report.source.history_verification=structuredClone(scope);
+  return data;
+}
+
+test('incremental source checking displays its recent range and preserves the earlier full-history time',async()=>{
+  const data=scopedHistory();const {doc,app}=await start(data);
+  assert.equal(doc.nodes['timesfm-panel'].dataset.state,'current');
+  assert.equal(doc.nodes['timesfm-history-verified-row'].hidden,false);
+  assert.match(doc.nodes['timesfm-history-verified-at'].textContent,/1~1248회/);
+  assert.notEqual(doc.nodes['timesfm-history-verified-at'].textContent,doc.nodes['timesfm-source-verified'].textContent);
+  assert.match(doc.nodes['timesfm-history-verification-note'].textContent,/1186~1249회/);
+  assert.match(doc.nodes['timesfm-history-verification-note'].textContent,/전체 과거 이력을 다시 조회한 것은 아닙니다/);
+  app.destroy();
+});
+
+test('full source checking is displayed only with complete and matching scope metadata',async()=>{
+  const data=scopedHistory('full');const {doc,app}=await start(data);
+  assert.equal(doc.nodes['timesfm-panel'].dataset.state,'current');
+  assert.match(doc.nodes['timesfm-history-verification-note'].textContent,/1~1249회 전체 이력을 공식 자료에서 확인/);
+  app.destroy();
+  const legacy=await start();assert.equal(legacy.doc.nodes['timesfm-history-verified-row'].hidden,true);assert.equal(legacy.doc.nodes['timesfm-history-verification-note'].hidden,true);legacy.app.destroy();
+});
+
+test('invalid incremental metadata and overstated full verification fail closed',()=>{
+  const mutations=[
+    d=>d.history.source.history_verification.full_history_verified_at='2026-11-11T00:00:00Z',
+    d=>d.history.source.history_verification.rechecked_first_round=0,
+    d=>d.history.source.history_verification.rechecked_last_round--,
+    d=>d.history.source.history_verification.baseline_sha256='missing',
+    d=>d.history.source.history_verification.mode='full',
+    d=>d.report.source.history_verification.full_history_verified_at='2026-11-11T00:00:00Z',
+    d=>{d.history.raw_draws.shift();d.history.count--;}
+  ];
+  mutations.forEach(mutate=>{const data=scopedHistory();mutate(data);assert.throws(()=>ui.validateReport(data.report,data.reference,data.history,core,NOW));});
+});
