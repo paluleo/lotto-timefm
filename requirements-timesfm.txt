@@ -1,0 +1,9 @@
+# First install torch==2.15.0+cpu from https://download.pytorch.org/whl/cpu.
+# Its public version satisfies torch==2.15.0 below. The runner verifies CPU use.
+# Runtime versions are also recorded in each inference artifact.
+# Checkpoint revision and SHA-256 are pinned and checked in timesfm_forecast.py.
+timesfm[torch]==2.0.2
+torch==2.15.0
+numpy==2.5.4
+huggingface_hub==2.4.0
+safetensors==0.8.0
